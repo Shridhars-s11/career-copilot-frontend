@@ -1,6 +1,6 @@
 import { useState } from 'react'
  
-const API_BASE = 'http://127.0.0.1:8000'
+const API_BASE = 'https://career-copilot-api-cg9h.onrender.com'
  
 function MatchRing({ score }) {
   const pct = score != null ? Math.round(score * 100) : null
