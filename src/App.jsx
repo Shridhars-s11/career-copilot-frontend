@@ -1,6 +1,82 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
  
 const API_BASE = 'https://career-copilot-api-cg9h.onrender.com'
+ 
+function ProgressPage() {
+  const [trends, setTrends] = useState(null)
+  const [error, setError] = useState(null)
+ 
+  useEffect(() => {
+    fetch(`${API_BASE}/performance/trends`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`)
+        return res.json()
+      })
+      .then(setTrends)
+      .catch((e) => setError(e.message))
+  }, [])
+ 
+  if (error) {
+    return <p className="text-secondary text-sm">{error}</p>
+  }
+  if (!trends) {
+    return <p className="text-muted text-sm">Loading…</p>
+  }
+ 
+  const categories = Object.keys(trends)
+  if (categories.length === 0) {
+    return (
+      <p className="text-muted text-sm">
+        No interview sessions yet — practice a mock interview to start seeing your trend here.
+      </p>
+    )
+  }
+ 
+  // merge all categories into one array of points, keyed by index (session order)
+  const maxLen = Math.max(...categories.map((c) => trends[c].length))
+  const chartData = Array.from({ length: maxLen }, (_, i) => {
+    const point = { session: i + 1 }
+    categories.forEach((cat) => {
+      if (trends[cat][i]) point[cat] = trends[cat][i].score
+    })
+    return point
+  })
+ 
+  const colors = { technical: '#D9A441', communication: '#4FA3A3' }
+ 
+  return (
+    <div>
+      <header className="mb-8">
+        <h1 className="font-mono text-2xl text-ink tracking-tight">Progress</h1>
+        <p className="text-muted text-sm mt-1">Your interview scores over time, by category.</p>
+      </header>
+      <section className="bg-surface border border-border rounded-lg p-5">
+        <ResponsiveContainer width="100%" height={320}>
+          <LineChart data={chartData}>
+            <CartesianGrid stroke="#2A3350" strokeDasharray="3 3" />
+            <XAxis dataKey="session" stroke="#8B92A8" fontSize={12} label={{ value: 'Session #', position: 'insideBottom', offset: -5, fill: '#8B92A8', fontSize: 11 }} />
+            <YAxis stroke="#8B92A8" fontSize={12} domain={[0, 100]} />
+            <Tooltip contentStyle={{ background: '#171E2E', border: '1px solid #2A3350', borderRadius: 6 }} labelStyle={{ color: '#E8E6DF' }} />
+            <Legend />
+            {categories.map((cat) => (
+              <Line
+                key={cat}
+                type="monotone"
+                dataKey={cat}
+                stroke={colors[cat] || '#8B92A8'}
+                strokeWidth={2}
+                dot={{ r: 4 }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </section>
+    </div>
+  )
+}
  
 function MatchRing({ score }) {
   const pct = score != null ? Math.round(score * 100) : null
@@ -29,20 +105,26 @@ function MatchRing({ score }) {
   )
 }
  
-function Sidebar() {
-  const items = ['Job Matches', 'Resumes', 'Interview Practice', 'Progress']
+function Sidebar({ page, onNavigate }) {
+  const items = [
+    { label: 'Job Matches', key: 'jobs', enabled: true },
+    { label: 'Resumes', key: 'resumes', enabled: false },
+    { label: 'Interview Practice', key: 'interview', enabled: false },
+    { label: 'Progress', key: 'progress', enabled: true },
+  ]
   return (
     <aside className="w-56 shrink-0 border-r border-border px-5 py-6 hidden md:block">
       <div className="font-mono text-accent text-sm tracking-wide mb-8">CAREER COPILOT</div>
       <nav className="flex flex-col gap-1">
-        {items.map((item, i) => (
+        {items.map((item) => (
           <div
-            key={item}
+            key={item.key}
+            onClick={() => item.enabled && onNavigate(item.key)}
             className={`px-3 py-2 rounded text-sm font-sans ${
-              i === 0 ? 'bg-surface text-ink' : 'text-muted hover:text-ink'
-            }`}
+              page === item.key ? 'bg-surface text-ink' : 'text-muted'
+            } ${item.enabled ? 'cursor-pointer hover:text-ink' : 'cursor-not-allowed opacity-50'}`}
           >
-            {item}
+            {item.label}
           </div>
         ))}
       </nav>
@@ -104,6 +186,7 @@ function ResumeUpload({ onUploaded }) {
 }
  
 export default function App() {
+  const [page, setPage] = useState('jobs')
   const [form, setForm] = useState({
     profile_text: 'Fresher aspiring AI/ML engineer skilled in Python, PyTorch, LangChain, FastAPI, Docker, MySQL',
     skills: 'Python, PyTorch, LangChain, FastAPI, Docker, MySQL',
@@ -191,9 +274,13 @@ export default function App() {
  
   return (
     <div className="min-h-screen flex font-sans">
-      <Sidebar />
+      <Sidebar page={page} onNavigate={setPage} />
  
       <main className="flex-1 px-6 md:px-10 py-8 max-w-3xl">
+        {page === 'progress' ? (
+          <ProgressPage />
+        ) : (
+          <>
         <header className="mb-8">
           <h1 className="font-mono text-2xl text-ink tracking-tight">Job Matches</h1>
           <p className="text-muted text-sm mt-1">
@@ -352,6 +439,8 @@ export default function App() {
             </section>
  
             {decisionResult.decision === 'approve' && <InterviewPractice jobId={match.job_id} />}
+          </>
+        )}
           </>
         )}
       </main>
