@@ -4,6 +4,7 @@ import {
 } from 'recharts'
  
 const API_BASE = 'https://career-copilot-api-cg9h.onrender.com'
+// const API_BASE = 'http://127.0.0.1:8000'
  
 function ProgressPage() {
   const [trends, setTrends] = useState(null)
@@ -108,8 +109,8 @@ function MatchRing({ score }) {
 function Sidebar({ page, onNavigate }) {
   const items = [
     { label: 'Job Matches', key: 'jobs', enabled: true },
-    { label: 'Resumes', key: 'resumes', enabled: false },
-    { label: 'Interview Practice', key: 'interview', enabled: false },
+    { label: 'Resumes', key: 'resumes', enabled: true },
+    { label: 'Interview Practice', key: 'interview', enabled: true },
     { label: 'Progress', key: 'progress', enabled: true },
   ]
   return (
@@ -185,6 +186,87 @@ function ResumeUpload({ onUploaded }) {
   )
 }
  
+function ResumesPage() {
+  const [resumes, setResumes] = useState(null)
+  const [error, setError] = useState(null)
+ 
+  useEffect(() => {
+    fetch(`${API_BASE}/resumes`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`)
+        return res.json()
+      })
+      .then(setResumes)
+      .catch((e) => setError(e.message))
+  }, [])
+ 
+  if (error) return <p className="text-secondary text-sm">{error}</p>
+  if (!resumes) return <p className="text-muted text-sm">Loading…</p>
+ 
+  return (
+    <div>
+      <header className="mb-8">
+        <h1 className="font-mono text-2xl text-ink tracking-tight">Resumes</h1>
+        <p className="text-muted text-sm mt-1">Every resume version saved so far — your master, plus one tailored copy per job.</p>
+      </header>
+      {resumes.length === 0 ? (
+        <p className="text-muted text-sm">No resumes yet — upload one from Job Matches.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {resumes.map((r) => (
+            <div key={r.id} className="bg-surface border border-border rounded-lg p-4 flex items-center justify-between">
+              <div>
+                <div className="text-ink text-sm font-medium">{r.version_label}</div>
+                <div className="text-muted text-xs font-mono mt-1">id {r.id} &middot; {new Date(r.created_at).toLocaleString()}</div>
+              </div>
+              {r.is_master && (
+                <span className="text-xs font-mono text-accent border border-accent/40 rounded px-2 py-1">MASTER</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+ 
+function InterviewPracticeStandalone() {
+  const [jobId, setJobId] = useState('')
+  const [started, setStarted] = useState(false)
+ 
+  return (
+    <div>
+      <header className="mb-8">
+        <h1 className="font-mono text-2xl text-ink tracking-tight">Interview Practice</h1>
+        <p className="text-muted text-sm mt-1">Practice for any job id from your Job Matches history.</p>
+      </header>
+ 
+      {!started ? (
+        <section className="bg-surface border border-border rounded-lg p-5">
+          <label className="flex flex-col gap-1 text-sm text-muted mb-4">
+            Job id
+            <input
+              className="bg-bg border border-border rounded px-3 py-2 text-ink font-sans focus:outline-none focus:ring-1 focus:ring-accent max-w-xs"
+              value={jobId}
+              onChange={(e) => setJobId(e.target.value)}
+              placeholder="e.g. 62"
+            />
+          </label>
+          <button
+            onClick={() => jobId && setStarted(true)}
+            disabled={!jobId}
+            className="bg-accent text-bg font-mono text-sm px-4 py-2 rounded hover:opacity-90 disabled:opacity-50"
+          >
+            Start practice
+          </button>
+        </section>
+      ) : (
+        <InterviewPractice jobId={Number(jobId)} />
+      )}
+    </div>
+  )
+}
+ 
 export default function App() {
   const [page, setPage] = useState('jobs')
   const [form, setForm] = useState({
@@ -194,6 +276,7 @@ export default function App() {
     resume_id: 1,
     location: '',
     workMode: 'any',
+    experienceLevel: 'fresher',
   })
   const [loading, setLoading] = useState(false)
   const [match, setMatch] = useState(null) // { thread_id, job_id, job_title, company, apply_url, message }
@@ -212,6 +295,8 @@ export default function App() {
     if (form.location.trim()) finalQuery += ` in ${form.location.trim()}`
     if (form.workMode === 'remote') finalQuery += ' remote'
     if (form.workMode === 'onsite') finalQuery += ' onsite'
+    if (form.experienceLevel === 'fresher') finalQuery += ' fresher entry level 0 years experience'
+    if (form.experienceLevel === 'experienced') finalQuery += ' experienced'
  
     try {
       const res = await fetch(`${API_BASE}/run-job-search`, {
@@ -279,6 +364,10 @@ export default function App() {
       <main className="flex-1 px-6 md:px-10 py-8 max-w-3xl">
         {page === 'progress' ? (
           <ProgressPage />
+        ) : page === 'resumes' ? (
+          <ResumesPage />
+        ) : page === 'interview' ? (
+          <InterviewPracticeStandalone />
         ) : (
           <>
         <header className="mb-8">
@@ -336,6 +425,18 @@ export default function App() {
                 <option value="any">Any</option>
                 <option value="remote">Remote / work from home</option>
                 <option value="onsite">Onsite / in office</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm text-muted">
+              Experience level
+              <select
+                className="bg-bg border border-border rounded px-3 py-2 text-ink font-sans focus:outline-none focus:ring-1 focus:ring-accent"
+                value={form.experienceLevel}
+                onChange={(e) => setForm({ ...form, experienceLevel: e.target.value })}
+              >
+                <option value="any">Any</option>
+                <option value="fresher">Fresher / 0 years experience</option>
+                <option value="experienced">Experienced</option>
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm text-muted sm:col-span-2">
@@ -441,8 +542,8 @@ export default function App() {
             {decisionResult.decision === 'approve' && <InterviewPractice jobId={match.job_id} />}
           </>
         )}
-          </>
-        )}
+        </>
+      )}
       </main>
     </div>
   )
